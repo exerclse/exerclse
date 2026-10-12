@@ -22,7 +22,7 @@ COPY api/coach ./coach
 # ── Stage 3: final runtime (nginx + node) ─────────────────────────
 FROM nginxinc/nginx-unprivileged:alpine
 USER root
-RUN apk add --no-cache nodejs
+RUN apk add --no-cache nodejs su-exec
 # nginx config (templated port at container start)
 COPY railway/nginx.conf /etc/nginx/nginx.conf
 COPY railway/start.sh /start.sh
@@ -33,8 +33,9 @@ COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
 COPY catalogue/media/ /usr/share/nginx/html/exercise-media/
 # API code
 COPY --from=api-build /app/api /app/api
-RUN mkdir -p /data && chown nginx:nginx /data
-USER nginx
+RUN mkdir -p /data
+# NOTE: stays as root — start.sh fixes /data ownership (Railway volume
+# mounts as root at runtime) then drops to nginx via su-exec.
 ENV NODE_ENV=production
 EXPOSE 8080
 CMD ["/start.sh"]

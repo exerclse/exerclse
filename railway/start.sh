@@ -1,17 +1,23 @@
 #!/bin/sh
 # Exerclse start script: API (Node) on 127.0.0.1:3000, nginx on Railway's $PORT.
+# Runs as root at startup to fix /data ownership (Railway volume mounts as
+# root), then drops to the nginx user for the actual services.
 set -e
+
+# Fix ownership of the persistent volume (mounted at runtime as root).
+chown -R nginx:nginx /data
 
 # Rewrite the nginx listen port from Railway's PORT (default 8080 locally).
 NGINX_PORT="${PORT:-8080}"
 sed -i "s/listen 8080;/listen ${NGINX_PORT};/" /etc/nginx/nginx.conf
+chown nginx:nginx /etc/nginx/nginx.conf
 
-# Start the API in the background on its own fixed port.
-PORT=3000 DATA_DIR="${DATA_DIR:-/data}" node /app/api/server.js &
+# Start the API in the background on its own fixed port (as nginx).
+PORT=3000 DATA_DIR="${DATA_DIR:-/data}" su-exec nginx node /app/api/server.js &
 API_PID=$!
 
 # Give the API a moment to bind before nginx takes traffic.
 sleep 2
 
-# nginx in the foreground (container's main process).
-exec nginx -g "daemon off;"
+# nginx in the foreground (container's main process, as nginx).
+exec su-exec nginx nginx -g "daemon off;"
